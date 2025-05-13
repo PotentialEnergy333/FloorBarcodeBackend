@@ -71,6 +71,8 @@
     .yellow { background-color: #fff3cd; }
     .blue   { background-color: #d0e7ff; }
     .white  { background-color: white; }
+    .orange { background-color: #ffe5b4; }
+    .red    { background-color: #f8d7da; }
 
     @media (max-width: 600px) {
       h1 {
@@ -111,13 +113,20 @@
         <textarea name="barcode_input" id="barcode_input" oninput="highlightInput()" spellcheck="false"></textarea>
       </div>
     </div>
-
+    <div id="stats" style="margin-bottom: 15px;">
+    <strong>North Side:</strong> <span id="northCount">0</span><br>
+    <strong>South Side:</strong> <span id="southCount">0</span><br>
+    <strong>Floor Locations:</strong> <span id="floorCount">0</span><br>
+    <strong>Rack Locations:</strong> <span id="rackCount">0</span><br>
+    <strong>Stage Locations:</strong> <span id="stageCount">0</span><br>
+    <strong>Total:</strong> <span id="totalCount">0</span>
+    </div>
     <label for="mode">Select paper size:</label>
     <select name="mode">
       <option value="standard">Standard 8.5 x 11</option>
       <option value="label">Label 4 x 6</option>
     </select><br>
-
+    
     <button type="submit" onclick="setAction('view')">Print in Browser</button>
     <button type="submit" onclick="setAction('download')">Download PDF</button>
     <button type="button" onclick="fixFormatting()">Fix Formatting</button>
@@ -148,29 +157,72 @@
     }
 
     function highlightInput() {
-      const lines = textarea.value.split("\n");
+        const lines = textarea.value.split("\n");
 
-      highlighted.innerHTML = lines.map(line => {
-        const clean = line.trim();
-        if (clean === "") return `<div class="white">&nbsp;</div>`;
+        let floorCount = 0;
+        let rackCount = 0;
+        let stageCount = 0;
+        let northCount = 0;
+        let southCount = 0;
 
-        const letterCount = (clean.match(/[A-Z]/gi) || []).length;
-        const hasDash = clean.includes("-");
-        const isValid1 = /^[0-9]{3}[A-Z][0-9]{3}$/.test(clean);     // XXXLXXX
-        const isValid2 = /^[0-9]{3}[A-Z][0-9]{3}[A-Z]$/.test(clean); // XXXLXXXL
-        const isValid3 = /^[A-Z]{2}[0-9]{2}$/.test(clean);           // LLXX
+        highlighted.innerHTML = lines.map(line => {
+            const clean = line.trim();
+            if (clean === "") return `<div class="white">&nbsp;</div>`;
 
-        let className = "white";
-        if (letterCount <= 2) {
-          className = (isValid1 || isValid2 || isValid3) ? "green" : "yellow";
-        } else if (letterCount >= 3 && hasDash) {
-          className = "blue";
-        }
+            const upper = clean.toUpperCase();
+            const hasDash = upper.includes("-");
+
+            const isValidFloor = /^[0-9]{3}[A-Z][0-9]{3}$/.test(upper);       // XXXLXXX
+            const isValidRack  = /^[0-9]{3}[A-Z][0-9]{3}[A-Z]$/.test(upper);  // XXXLXXXL
+            const isValidLLXX  = /^[A-Z]{2}[0-9]{2}$/.test(upper);            // LLXX
+            const isFloorLike  = /^[0-9]{2,3}[A-Z][0-9]{2,3}$/.test(upper);   // Matches malformed floor-like entries
+
+            let className = "white";
+
+            if (hasDash) {
+            stageCount++;
+            className = "orange";
+            } else if (isValidRack) {
+            rackCount++;
+            const direction = upper[3];
+            if (direction === "N") {
+                className = "green";
+                northCount++;
+            } else if (direction === "S") {
+                className = "blue";
+                southCount++;
+            }
+            } else if (isValidFloor) {
+            floorCount++;
+            const direction = upper[3];
+            if (direction === "N") {
+                className = "green";
+                northCount++;
+            } else if (direction === "S") {
+                className = "blue";
+                southCount++;
+            }
+            } else if (isValidLLXX) {
+            floorCount++;
+            className = "blue"; // LLXX is always south side
+            southCount++;
+            } else if (isFloorLike) {
+            className = "red"; // bad floor-like format
+            }
 
         return `<div class="${className}">${line || '&nbsp;'}</div>`;
-      }).join("");
-    }
+    }).join("");
 
+    const totalCount = floorCount + rackCount + stageCount;
+
+    // Update stat values
+    document.getElementById("floorCount").textContent = floorCount;
+    document.getElementById("rackCount").textContent = rackCount;
+    document.getElementById("stageCount").textContent = stageCount;
+    document.getElementById("northCount").textContent = northCount;
+    document.getElementById("southCount").textContent = southCount;
+    document.getElementById("totalCount").textContent = totalCount;
+}
     document.addEventListener("DOMContentLoaded", highlightInput);
 
     function fixFormatting() {
