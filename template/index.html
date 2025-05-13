@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Barcode PDF Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .input-wrapper {
+      margin-bottom: 20px;
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .container {
+      display: grid;
+      position: relative;
+    }
+
+    #barcode_input,
+    #highlighted {
+      font-family: monospace;
+      font-size: 14px;
+      line-height: 20px;
+      padding: 8px;
+      box-sizing: border-box;
+      width: 400px;
+      height: 240px;
+      overflow: auto;
+      border: 1px solid #ccc;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      resize: both;
+      min-height: 100px;
+      min-width: 300px;
+      max-width: 100%;
+    }
+
+    #highlighted {
+      color: transparent;
+      z-index: 0;
+      pointer-events: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #barcode_input {
+      background: transparent;
+      z-index: 1;
+      position: relative;
+    }
+
+    button, select {
+      padding: 10px 16px;
+      font-size: 14px;
+      margin: 5px 5px 10px 0;
+      cursor: pointer;
+    }
+
+    .green  { background-color: #d4edda; }
+    .yellow { background-color: #fff3cd; }
+    .blue   { background-color: #d0e7ff; }
+    .white  { background-color: white; }
+
+    @media (max-width: 600px) {
+      h1 {
+        font-size: 20px;
+        text-align: center;
+      }
+
+      .input-wrapper,
+      #barcode_input,
+      #highlighted {
+        width: 100% !important;
+        height: 40vh;
+      }
+
+      form {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+      }
+
+      button, select {
+        width: 100%;
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Barcode PDF Generator</h1>
+
+  <form id="barcodeForm" method="post" action="https://floorbarcodebackend.onrender.com/generate" target="_blank">
+    <label for="barcode_input">Enter barcodes (one per line):</label><br><br>
+
+    <div class="input-wrapper">
+      <div class="container">
+        <div id="highlighted"></div>
+        <textarea name="barcode_input" id="barcode_input" oninput="highlightInput()" spellcheck="false"></textarea>
+      </div>
+    </div>
+
+    <label for="mode">Select paper size:</label>
+    <select name="mode">
+      <option value="standard">Standard 8.5 x 11</option>
+      <option value="label">Label 4 x 6</option>
+    </select><br>
+
+    <button type="submit" onclick="setAction('view')">Print in Browser</button>
+    <button type="submit" onclick="setAction('download')">Download PDF</button>
+    <button type="button" onclick="fixFormatting()">Fix Formatting</button>
+    <button type="button" onclick="capitalizeAll()">Capitalize All</button>
+
+    <input type="hidden" name="action" id="actionField" value="view">
+  </form>
+
+  <script>
+    document.getElementById("barcode_input").addEventListener("scroll", function () {
+      const highlighted = document.getElementById("highlighted");
+      highlighted.scrollTop = this.scrollTop;
+      highlighted.scrollLeft = this.scrollLeft;
+    });
+
+    const textarea = document.getElementById("barcode_input");
+    const highlighted = document.getElementById("highlighted");
+
+    const observer = new ResizeObserver(() => {
+      highlighted.style.width = textarea.offsetWidth + "px";
+      highlighted.style.height = textarea.offsetHeight + "px";
+    });
+
+    observer.observe(textarea);
+
+    function setAction(action) {
+      document.getElementById('actionField').value = action;
+    }
+
+    function highlightInput() {
+      const lines = textarea.value.split("\n");
+
+      highlighted.innerHTML = lines.map(line => {
+        const clean = line.trim();
+        if (clean === "") return `<div class="white">&nbsp;</div>`;
+
+        const letterCount = (clean.match(/[A-Z]/gi) || []).length;
+        const hasDash = clean.includes("-");
+        const isValid1 = /^[0-9]{3}[A-Z][0-9]{3}$/.test(clean);     // XXXLXXX
+        const isValid2 = /^[0-9]{3}[A-Z][0-9]{3}[A-Z]$/.test(clean); // XXXLXXXL
+        const isValid3 = /^[A-Z]{2}[0-9]{2}$/.test(clean);           // LLXX
+
+        let className = "white";
+        if (letterCount <= 2) {
+          className = (isValid1 || isValid2 || isValid3) ? "green" : "yellow";
+        } else if (letterCount >= 3 && hasDash) {
+          className = "blue";
+        }
+
+        return `<div class="${className}">${line || '&nbsp;'}</div>`;
+      }).join("");
+    }
+
+    document.addEventListener("DOMContentLoaded", highlightInput);
+
+    function fixFormatting() {
+      const lines = textarea.value.split("\n");
+
+      const fixedLines = lines.map(line => {
+        let original = line.trim();
+        if (original === "") return "";
+
+        let input = original.toUpperCase();
+
+        if (/^[A-Z]{2}\d$/.test(input)) return input.slice(0, 2) + "0" + input.slice(2);
+        if (/^\d{3}[A-Z]\d{1}$/.test(input)) return input.slice(0, 4) + "00" + input.slice(4);
+        if (/^\d{3}[A-Z]\d{1}[A-Z]$/.test(input)) return input.slice(0, 4) + "00" + input.slice(4);
+        if (/^\d{2}[A-Z]\d{1}$/.test(input)) return "0" + input.slice(0, 3) + "00" + input.slice(3);
+        if (/^\d{2}[A-Z]\d{1}[A-Z]$/.test(input)) return "0" + input.slice(0, 3) + "00" + input.slice(3);
+        if (/^\d{2}[A-Z]\d{3}$/.test(input)) return "0" + input;
+        if (/^\d{3}[A-Z]\d{2}$/.test(input)) return input.slice(0, 4) + "0" + input.slice(4);
+        if (/^\d{2}[A-Z]\d{2}$/.test(input)) return "0" + input.slice(0, 3) + "0" + input.slice(3);
+        if (/^\d{3}[A-Z]\d{2}[A-Z]$/.test(input)) return input.slice(0, 4) + "0" + input.slice(4);
+        if (/^\d{2}[A-Z]\d{3}[A-Z]$/.test(input)) return "0" + input;
+        if (/^\d{2}[A-Z]\d{2}[A-Z]$/.test(input)) return "0" + input.slice(0, 3) + "0" + input.slice(3);
+
+        return input;
+      });
+
+      textarea.value = fixedLines.join("\n");
+      highlightInput();
+    }
+
+    function capitalizeAll() {
+      const lines = textarea.value.split("\n");
+      textarea.value = lines.map(line => line.toUpperCase()).join("\n");
+      highlightInput();
+    }
+  </script>
+</body>
+</html>
